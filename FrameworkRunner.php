@@ -4,7 +4,7 @@ require_once('bezier.php');
 
 class FrameworkRunner{
 
-  private $nodes, $links, $data, $semantics, $results;
+  private $nodes, $links, $data, $semantics = [], $results = [];
 
   public function __construct($aString){
     $decoded = json_decode($aString);
@@ -38,15 +38,18 @@ class FrameworkRunner{
 
       foreach($node->membership_functions as $memfunc){
 
-        if(!array_key_exists($memfunc->xLabel, $this->data)|| $this->data->{$memfunc->xLabel} == ""){
+        if(!array_key_exists($memfunc->xLabel, $this->data) ||
+        $this->data->{$memfunc->xLabel} < $memfunc->xMin ||
+        $this->data->{$memfunc->xLabel} > $memfunc->xMax){
+
           //remove from array
           unset($this->nodes[$id]);
-          echo "No value: $memfunc->xLabel in data. $id removed";
+          //echo "No value: $memfunc->xLabel in data. $id removed";
 
           foreach($this->links as $key => $link){
             if($link->target->id === $id || $link->source->id === $id){
               unset($this->links[$key]);
-              echo "Removed link number $key";
+              //echo "Removed link number $key";
             }
           }
 
@@ -54,15 +57,20 @@ class FrameworkRunner{
         }
       }
     }
-    //var_dump($this->links);
   }
 
   public function getTheSemantics(){
+
+    if(empty($this->nodes)){
+      return;
+    }
 
     $attacks = "[";
     $first = true;
 
     foreach($this->links as $attack){
+
+      $twoArgs = false;
 
       if(!$first){
         $attacks .= ",";
@@ -70,12 +78,28 @@ class FrameworkRunner{
         $first = false;
       }
 
-      $attacks .= "[";
-      $attacks .= $attack->target->id;
-      $attacks .= ",";
-      $attacks .= $attack->source->id;
-      $attacks .= "]";
+      if($attack->left === true){
+        $attacks .= "[";
+        $attacks .= $attack->target->id;
+        $attacks .= ",";
+        $attacks .= $attack->source->id;
+        $attacks .= "]";
 
+        $twoArgs = true;
+      }
+
+      if($attack->right === true){
+
+        if($twoArgs === true){
+          $attacks .= ",";
+        }
+
+        $attacks .= "[";
+        $attacks .= $attack->source->id;
+        $attacks .= ",";
+        $attacks .= $attack->target->id;
+        $attacks .= "]";
+      }
     }
     $attacks .= "]";
 
@@ -101,7 +125,8 @@ class FrameworkRunner{
 
     $arguments .= "]";
 
-    exec("java -jar ./tests/BasicFunctionality/javaDung.jar $attacks $arguments", $output);
+    exec("java -jar ./javaDung.jar $attacks $arguments", $output);
+
     $stringSemantics = json_decode(implode($output, "\n"));
 
     foreach($stringSemantics as $key => $stringSemantic){
@@ -128,6 +153,9 @@ class FrameworkRunner{
   }
 
   public function getTheResults(){
+    if(empty($this->nodes)){
+      return;
+    }
 
     // go through each semantic
     foreach($this->semantics as $key => $value){
@@ -138,7 +166,7 @@ class FrameworkRunner{
           $this->results[$key][$k]["result"] = $this->evaluateSemantic($v);
         }
       } else {
-        $this->results[$key]["arguments"] = $v;
+        $this->results[$key]["arguments"] = $value;
         $this->results[$key]["result"] = $this->evaluateSemantic($value);
       }
     }
@@ -166,6 +194,11 @@ class FrameworkRunner{
         continue;
       }
 
+      if($this->nodes[$arg]->output_function->title === "Mitigating Argument"){
+        // it is a mitigating argument
+        continue;
+      }
+
       $memfuncs = $this->nodes[$arg]->membership_functions;
 
       foreach($memfuncs as $memfunction){
@@ -178,7 +211,7 @@ class FrameworkRunner{
 
         $myBez = new Bezier($pointsList);
 
-        $total += $myBez->yFromX($this->data->{$memfunction->xLabel});
+        $argtotal += $myBez->yFromX($this->data->{$memfunction->xLabel});
         $memfunc_count++;
       }
 
@@ -186,7 +219,7 @@ class FrameworkRunner{
       if($memfunc_count === 0){
         $average = 0;
       } else {
-        $average = $total / $memfunc_count;
+        $average = $argtotal / $memfunc_count;
       }
       //get the corresponding output value for $average
 
@@ -198,14 +231,14 @@ class FrameworkRunner{
 
       $myBez = new Bezier($pointsList);
 
-      $argtotal += $myBez->xFromY($average);
+      $semanticTotal += $myBez->yFromX($average);
       $sem_count++;
     }
 
     if($sem_count === 0){
       return 0;
     } else {
-      return $argtotal / $sem_count;
+      return $semanticTotal / $sem_count;
     }
   }
 

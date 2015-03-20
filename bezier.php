@@ -49,7 +49,7 @@ class Bezier {
   public function yFromX($X){
 
     //Do a binary search
-    $xTolerance = .00001;
+    $xTolerance = .0000001;
 
     $lowerT = 0;
     $upperT = 1;
@@ -71,6 +71,12 @@ class Bezier {
       } else {
         $lowerT = ($upperT + $lowerT) / 2;
         $lower = $this->getPointAt($lowerT);
+      }
+
+      if(abs($X - $lower->x) < $xTolerance){
+        return $lower->y;
+      } elseif(abs($X - $upper->x) < $xTolerance){
+        return $upper->y;
       }
 
     } while(abs($X - $upper->x) > $xTolerance && abs($X - $lower->x) > $xTolerance);
@@ -103,6 +109,20 @@ class Bezier {
       } else {
         $lowerT = ($upperT + $lowerT) / 2;
         $lower = $this->getPointAt($lowerT);
+      }
+
+      if($lower->y === $Y){
+        return $lower->x;
+      }
+      if($upper->y === $Y){
+        return $upper->x;
+      }
+
+
+      if(abs($Y - $lower->y) < $yTolerance){
+        return $lower->x;
+      } elseif(abs($Y - $upper->y) < $yTolerance){
+        return $upper->x;
       }
 
     } while(abs($Y - $upper->y) > $yTolerance && abs($Y - $lower->y) > $yTolerance);

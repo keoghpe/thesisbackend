@@ -11,7 +11,7 @@ $app->get('/knowledgebases/', function () use ($app){
   $ls = array();
 
   while (false !== ($entry = $d->read())) {
-    if($entry === "." || $entry === ".."){
+    if($entry[0] === "."){
       continue;
     }
      array_push($ls, $entry);
@@ -58,7 +58,7 @@ $app->get('/datasets/', function () use ($app){
   $ls = array();
 
   while (false !== ($entry = $d->read())) {
-    if($entry === "." || $entry === ".."){
+    if($entry[0] === "."){
       continue;
     }
      array_push($ls, $entry);
@@ -74,65 +74,11 @@ $app->post('/', function () use ($app){
 
   $body = $app->request->getBody();
 
-
   $fr = new FrameworkRunner($body);
 
   header('Content-Type: application/json');
   echo json_encode($fr->getTheResults());
 
-
-
-
-
-  // $decoded_body = json_decode($body);
-  //
-  // $attacks = "[";
-  // $first = true;
-  //
-  // foreach($decoded_body->links as $attack){
-  //
-  //   if(!$first){
-  //     $attacks .= ",";
-  //   } else{
-  //     $first = false;
-  //   }
-  //
-  //   $attacks .= "[";
-  //   $attacks .= $attack->target->id;
-  //   $attacks .= ",";
-  //   $attacks .= $attack->source->id;
-  //   $attacks .= "]";
-  //
-  // }
-  // $attacks .= "]";
-  //
-  // $arguments = "[";
-  // $first = true;
-  // foreach($decoded_body->nodes as $argument){
-  //
-  //   foreach($argument->membership_functions as $memfunc){
-  //     foreach($memfunc->points as $point){
-  //       //echo "x : " . $point->x;
-  //       //echo "y : " . $point->y . "\n";
-  //     }
-  //   }
-  //
-  //   if(!$first){
-  //     $arguments .= ",";
-  //   } else{
-  //     $first = false;
-  //   }
-  //
-  //   $arguments .= $argument->id;
-  // }
-  //
-  // $arguments .= "]";
-  //
-  // exec("java -jar javaDung.jar $attacks $arguments", $output);
-  // $JSONoutput = json_decode(implode($output, "\n"));
-
-  // header('Content-Type: application/json');
-  // echo json_encode($JSONoutput);
 });
 
 $app->run();
