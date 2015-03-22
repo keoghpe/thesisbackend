@@ -4,16 +4,18 @@ require_once('bezier.php');
 
 class FrameworkRunner{
 
-  private $nodes, $links, $data, $semantics = [], $results = [];
+  private $nodes, $links, $data, $extensionsToGet, $semantics = [], $results = [];
 
   public function __construct($aString){
+
     $decoded = json_decode($aString);
 
     $this->nodes = $decoded->nodes;
     $this->links = $decoded->links;
     $this->data  = $decoded->data;
+    $this->extensionsToGet = $decoded->extensions;
     $this->getActivatedArgs();
-    $this->getTheSemantics();
+    //$this->getTheSemantics();
     //$this->getTheResults();
   }
 
@@ -64,6 +66,9 @@ class FrameworkRunner{
     if(empty($this->nodes)){
       return;
     }
+
+    // convert the nodes and links into the appropriate format
+    // for the jar
 
     $attacks = "[";
     $first = true;
@@ -125,9 +130,13 @@ class FrameworkRunner{
 
     $arguments .= "]";
 
-    exec("java -jar ./javaDung.jar $attacks $arguments", $output);
+    // get the semantics
+
+    exec("java -jar ./javaDung.jar $attacks $arguments $this->extensionsToGet", $output);
 
     $stringSemantics = json_decode(implode($output, "\n"));
+
+    //var_dump($stringSemantics);
 
     foreach($stringSemantics as $key => $stringSemantic){
       if(mb_substr($stringSemantic, 0, 2) === "[["){
@@ -171,7 +180,14 @@ class FrameworkRunner{
       }
     }
     //var_dump($this->results);
-    return $this->results;
+    //return $this->results;
+
+    return array(
+      "results" => $this->results,
+      "nodes" => $this->nodes,
+      "links" => $this->links,
+      "data" =>$this->data
+    );
   }
 
   public function evaluateSemantic($semantic){
@@ -186,58 +202,108 @@ class FrameworkRunner{
     //    get it's corresponding value
     //
 
+
+    // THIS NEEDS TO BE MADE EFFICIENT
+    // FOR EACH ARGUMENT
+    //
+
+
     foreach($semantic as $arg){
+
+      // echo "Start loop";
+
+      // CHECK IF THE ARGUMENT HAS A RESULT
+      //    IF IT DOES ADD IT TO THE SEMANTIC TOTAL AND CONTINUE
+      // IF NOT
+      //    GO THROUGH EACH MEMBERSHIP FUNCTION
+      //        GET THE RESULT
+      //        SAVE THE INPUT AND OUTPUT
+      //    SAVE THE AVERAGE IN THE NODE AND ADD IT TO THE SEMANTIC TOTAL
+
       $argtotal = 0;
       $memfunc_count = 0;
       //var_dump($this->nodes[$arg]->membership_functions);
-      if($arg === ""){
+      if($arg === ""
+      || $this->nodes[$arg]->output_function->title === "Mitigating Argument"){
         continue;
       }
 
-      if($this->nodes[$arg]->output_function->title === "Mitigating Argument"){
-        // it is a mitigating argument
-        continue;
-      }
+      $this->nodes[$arg] = (array) $this->nodes[$arg];
 
-      $memfuncs = $this->nodes[$arg]->membership_functions;
+      if(!isset($this->nodes[$arg]['total'])){
 
-      foreach($memfuncs as $memfunction){
+        $this->nodes[$arg]['total'] = 0;
+        // echo "Computing property: " . $this->nodes[$arg]['name'];
+        $this->nodes[$arg] = (object) $this->nodes[$arg];
+        $memfuncs = $this->nodes[$arg]->membership_functions;
+
+        foreach($memfuncs as $i => $memfunction){
+
+          $pointsList = [];
+
+          foreach($memfunction->points as $point){
+            array_push($pointsList, new Point($point->x, $point->y));
+          }
+
+          $myBez = new Bezier($pointsList);
+
+
+          $inputValue = $this->data->{$memfunction->xLabel};
+          $outputValue = $myBez->yFromX($inputValue);
+
+          $memfunction = (array) $memfunction;
+          $memfunction['inputValue'] = $inputValue;
+          $memfunction['outputValue'] = $outputValue;
+          $memfunction = (object) $memfunction;
+
+          $this->nodes[$arg]->membership_functions[$i] = $memfunction;
+
+          $argtotal += $outputValue;
+          $memfunc_count++;
+        }
+
+        // Get the averages of the truth
+        if($memfunc_count === 0){
+          $average = 0;
+        } else {
+          $average = $argtotal / $memfunc_count;
+        }
 
         $pointsList = [];
 
-        foreach($memfunction->points as $point){
+        foreach($this->nodes[$arg]->output_function->points as $point){
           array_push($pointsList, new Point($point->x, $point->y));
         }
 
         $myBez = new Bezier($pointsList);
 
-        $argtotal += $myBez->yFromX($this->data->{$memfunction->xLabel});
-        $memfunc_count++;
-      }
 
-      // Get the averages of the truth
-      if($memfunc_count === 0){
-        $average = 0;
+        $this->nodes[$arg]->degreeOfTruth = $average;
+
+        // echo "Average is: " . $average;
+
+        $this->nodes[$arg]->total = $myBez->yFromX($average);
+
+        // echo " Property computed \n";
+
       } else {
-        $average = $argtotal / $memfunc_count;
-      }
-      //get the corresponding output value for $average
 
-      $pointsList = [];
+        // echo "Saved property used \n";
 
-      foreach($this->nodes[$arg]->output_function->points as $point){
-        array_push($pointsList, new Point($point->x, $point->y));
+        $this->nodes[$arg] = (object) $this->nodes[$arg];
       }
 
-      $myBez = new Bezier($pointsList);
-
-      $semanticTotal += $myBez->yFromX($average);
+      $semanticTotal += $this->nodes[$arg]->total;
       $sem_count++;
     }
+    //echo "end loop \n";
 
     if($sem_count === 0){
       return 0;
     } else {
+
+      // echo "Semantic evaluated: " . $semanticTotal / $sem_count;
+
       return $semanticTotal / $sem_count;
     }
   }

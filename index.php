@@ -77,6 +77,7 @@ $app->post('/', function () use ($app){
   $fr = new FrameworkRunner($body);
 
   header('Content-Type: application/json');
+  $fr->getTheSemantics();
   echo json_encode($fr->getTheResults());
 
 });
